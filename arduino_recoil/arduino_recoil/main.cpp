@@ -9,7 +9,7 @@
 
 #pragma comment(lib, "setupapi.lib")
 
-bool toggle_key()
+bool recoil_toggle_key()
 {
     static bool previous_state = false;
     static bool toggle = false;
@@ -19,7 +19,24 @@ bool toggle_key()
     if (current_state && !previous_state)
     {
         toggle = !toggle;
-        std::cout << "INSERT TOGGLE: " << (toggle ? "ON" : "OFF") << "\n";
+        std::cout << "RECOIL: " << (toggle ? "ON" : "OFF") << "\n";
+    }
+
+    previous_state = current_state;
+    return toggle;
+}
+
+bool bhop_toggle_key()
+{
+    static bool previous_state = false;
+    static bool toggle = false;
+
+    bool current_state = (GetAsyncKeyState(VK_PRIOR) & 0x8000); // VK_PRIOR = page up key
+
+    if (current_state && !previous_state)
+    {
+        toggle = !toggle;
+        std::cout << "BHOP: " << (toggle ? "ON" : "OFF") << "\n";
     }
 
     previous_state = current_state;
@@ -34,6 +51,11 @@ bool left_pressed()
 bool right_pressed() 
 {
     return (GetAsyncKeyState(VK_RBUTTON) & 0x8000);
+}
+
+bool space_pressed()
+{
+    return (GetAsyncKeyState(VK_SPACE) & 0x8000);
 }
 
 std::string find_arduino_port()
@@ -71,11 +93,11 @@ std::string find_arduino_port()
     return std::string();
 }
 
-int main() 
+int main()
 {
     std::string port = find_arduino_port();
 
-    if (port.empty()) 
+    if (port.empty())
     {
         std::cerr << "[!] Could not auto-detect Arduino!\n";
         return 1;
@@ -96,7 +118,7 @@ int main()
     DCB dcb = { 0 };
     dcb.DCBlength = sizeof(DCB);
 
-    if (!GetCommState(serial_handle, &dcb)) 
+    if (!GetCommState(serial_handle, &dcb))
     {
         std::cerr << "[!] GetCommState failed!\n";
         CloseHandle(serial_handle);
@@ -108,7 +130,7 @@ int main()
     dcb.StopBits = ONESTOPBIT;
     dcb.Parity = NOPARITY;
 
-    if (!SetCommState(serial_handle, &dcb)) 
+    if (!SetCommState(serial_handle, &dcb))
     {
         std::cerr << "[!] SetCommState failed!\n";
         CloseHandle(serial_handle);
@@ -116,34 +138,59 @@ int main()
     }
 
     std::cout << "Controls:\n";
-    std::cout << "  [-] Press [INSERT] to toggle active mode\n";
-    std::cout << "  [-] While active, hold [Left + Right Click] to send recoil\n\n";
+    std::cout << "  [-] Press [INSERT] -> recoil | [PAGE UP] -> bhop\n";
+    std::cout << "  [-] Hold [Left Click] -> auto recoil\n";
+    std::cout << "  [-] Hold [Space Bar] -> auto bhop\n\n";
 
     bool recoil_active = false;
+    bool bhop_active = false;
 
-    while (true) 
+    while (true)
     {
-        bool is_toggled = toggle_key();
+        // auto bhop.
+        if (bhop_toggle_key() && space_pressed())
+        {
+            if (!bhop_active)
+            {
+                char cmd = 'j';
+                DWORD bytes_written;
+                WriteFile(serial_handle, &cmd, 1, &bytes_written, nullptr);
+                // std::cout << "BHOP: ACTIVE\n";
+                bhop_active = true;
+            }
+        }
+        else
+        {
+            if (bhop_active)
+            {
+                char cmd = 'a';
+                DWORD bytes_written;
+                WriteFile(serial_handle, &cmd, 1, &bytes_written, nullptr);
+                // std::cout << "BHOP: STOPPED\n";
+                bhop_active = false;
+            }
+        }
 
-        if (is_toggled && left_pressed() && right_pressed())
+        // recoil control.
+        if (recoil_toggle_key() && left_pressed())
         {
             if (!recoil_active)
             {
                 char cmd = 's';
                 DWORD bytes_written;
                 WriteFile(serial_handle, &cmd, 1, &bytes_written, nullptr);
-                std::cout << "RECOIL: ACTIVE\n";
+                // std::cout << "RECOIL: ACTIVE\n";
                 recoil_active = true;
             }
         }
-        else 
+        else
         {
             if (recoil_active)
             {
                 char cmd = 'x';
                 DWORD bytes_written;
                 WriteFile(serial_handle, &cmd, 1, &bytes_written, nullptr);
-                std::cout << "RECOIL: STOPPED\n";
+                // std::cout << "RECOIL: STOPPED\n";
                 recoil_active = false;
             }
         }
