@@ -9,21 +9,9 @@
 
 #pragma comment(lib, "setupapi.lib")
 
-bool recoil_toggle_key()
+bool color_bot_key()
 {
-    static bool previous_state = false;
-    static bool toggle = false;
-
-    bool current_state = (GetAsyncKeyState(VK_INSERT) & 0x8000);
-
-    if (current_state && !previous_state)
-    {
-        toggle = !toggle;
-        std::cout << "RECOIL: " << (toggle ? "ON" : "OFF") << "\n";
-    }
-
-    previous_state = current_state;
-    return toggle;
+    return GetAsyncKeyState(VK_XBUTTON1); // VK_XBUTTON1 = mouse 5
 }
 
 bool bhop_toggle_key()
@@ -31,7 +19,7 @@ bool bhop_toggle_key()
     static bool previous_state = false;
     static bool toggle = false;
 
-    bool current_state = (GetAsyncKeyState(VK_PRIOR) & 0x8000); // VK_PRIOR = page up key
+    bool current_state = GetAsyncKeyState(VK_PRIOR); // VK_PRIOR = page up key
 
     if (current_state && !previous_state)
     {
@@ -43,19 +31,24 @@ bool bhop_toggle_key()
     return toggle;
 }
 
-bool left_pressed() 
-{
-    return (GetAsyncKeyState(VK_LBUTTON) & 0x8000);
-}
-
-bool right_pressed() 
-{
-    return (GetAsyncKeyState(VK_RBUTTON) & 0x8000);
-}
-
 bool space_pressed()
 {
-    return (GetAsyncKeyState(VK_SPACE) & 0x8000);
+    return GetAsyncKeyState(VK_SPACE);
+}
+
+COLORREF get_pixel_color(int x, int y)
+{
+    HDC hdc = GetDC(NULL);
+    COLORREF color = GetPixel(hdc, x, y);
+    ReleaseDC(NULL, hdc);
+    return color;
+}
+
+bool is_color_different(COLORREF color1, COLORREF color2, int threshold)
+{
+    int red1 = GetRValue(color1), green1 = GetGValue(color1), blue1 = GetBValue(color1);
+    int red2 = GetRValue(color2), green2 = GetGValue(color2), blue2 = GetBValue(color2);
+    return (std::abs(red1 - red2) > threshold || std::abs(green1 - green2) > threshold || std::abs(blue1 - blue2) > threshold);
 }
 
 std::string find_arduino_port()
@@ -138,12 +131,12 @@ int main()
     }
 
     std::cout << "Controls:\n";
-    std::cout << "  [-] Press [INSERT] -> recoil | [PAGE UP] -> bhop\n";
-    std::cout << "  [-] Hold [Left Click] -> auto recoil\n";
+    std::cout << "  [-] Press [PAGE UP] -> bhop\n";
+    std::cout << "  [-] Hold [Mouse 5] -> triggerbot\n";
     std::cout << "  [-] Hold [Space Bar] -> auto bhop\n\n";
 
-    bool recoil_active = false;
     bool bhop_active = false;
+    bool trigger_active = false;
 
     while (true)
     {
@@ -155,7 +148,6 @@ int main()
                 char cmd = 'j';
                 DWORD bytes_written;
                 WriteFile(serial_handle, &cmd, 1, &bytes_written, nullptr);
-                // std::cout << "BHOP: ACTIVE\n";
                 bhop_active = true;
             }
         }
@@ -166,32 +158,49 @@ int main()
                 char cmd = 'a';
                 DWORD bytes_written;
                 WriteFile(serial_handle, &cmd, 1, &bytes_written, nullptr);
-                // std::cout << "BHOP: STOPPED\n";
                 bhop_active = false;
             }
         }
 
-        // recoil control.
-        if (recoil_toggle_key() && left_pressed())
+        // trigger control.
+        POINT cursor;
+        if (!GetCursorPos(&cursor))
         {
-            if (!recoil_active)
+            std::cerr << "[!] Could not find mouse cursor!\n";
+            return 1;
+        }
+
+        COLORREF initial = get_pixel_color(cursor.x + 2, cursor.y + 2);
+
+        if (color_bot_key())
+        {
+            GetCursorPos(&cursor);
+            COLORREF current = get_pixel_color(cursor.x + 2, cursor.y + 2);
+
+            // get color change threshold.
+            int color_threshold = 20;
+
+            if (is_color_different(initial, current, color_threshold))
             {
-                char cmd = 's';
-                DWORD bytes_written;
-                WriteFile(serial_handle, &cmd, 1, &bytes_written, nullptr);
-                // std::cout << "RECOIL: ACTIVE\n";
-                recoil_active = true;
+                if (!trigger_active)
+                {
+                    char cmd = 's';
+                    DWORD bytes_written;
+                    WriteFile(serial_handle, &cmd, 1, &bytes_written, nullptr);
+                    trigger_active = true;
+                }
             }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
         else
         {
-            if (recoil_active)
+            if (trigger_active)
             {
                 char cmd = 'x';
                 DWORD bytes_written;
                 WriteFile(serial_handle, &cmd, 1, &bytes_written, nullptr);
-                // std::cout << "RECOIL: STOPPED\n";
-                recoil_active = false;
+                trigger_active = false;
             }
         }
 
