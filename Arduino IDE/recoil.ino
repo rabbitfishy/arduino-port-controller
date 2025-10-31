@@ -1,6 +1,6 @@
 #include <Mouse.h>
 
-unsigned long timer2 = 0, timer4 = 0;
+unsigned long timer1 = 0, timer2 = 0, timer3 = 0;
 constexpr double TICK_64MS = 15.6;
 
 bool is_timer_elapsed(unsigned long& timer, unsigned long interval) {
@@ -14,7 +14,7 @@ bool is_timer_elapsed(unsigned long& timer, unsigned long interval) {
   return false;
 }
 
-bool auto_recoil = false;
+bool auto_trigger = false;
 bool auto_bhop = false;
 
 void setup() {
@@ -34,10 +34,10 @@ void loop() {
         auto_bhop = false;
         break;
       case 's':
-        auto_recoil = true;
+        auto_trigger = true;
         break;
       case 'x':
-        auto_recoil = false;
+        auto_trigger = false;
         break;
     }
   }
@@ -47,14 +47,15 @@ void loop() {
     if (is_timer_elapsed(timer2, TICK_64MS * 39)) {
       Mouse.move(0, 0, -1);
     }
-    if (is_timer_elapsed(timer4, TICK_64MS * 2)) {
+    if (is_timer_elapsed(timer3, TICK_64MS * 2)) {
       Mouse.move(0, 0, -1);
     }
   }
 
-  // recoil.
-  if (auto_recoil) {
-    Mouse.move(0, 6);
-    delay(11);  // delay function takes ms as param.
+  // trigger.
+  if (auto_trigger) {
+    if (is_timer_elapsed(timer1, 300)) {
+      Mouse.click(MOUSE_LEFT);
+    }
   }
 }
