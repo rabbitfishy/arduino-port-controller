@@ -57,5 +57,7 @@ void loop() {
     if (is_timer_elapsed(timer1, 300)) {
       Mouse.click(MOUSE_LEFT);
     }
+  } else {
+    Mouse.release(MOUSE_LEFT);
   }
 }
